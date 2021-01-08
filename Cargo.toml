@@ -1,0 +1,18 @@
+[package]
+name = "corsairmi"
+version = "0.1.0"
+authors = ["Alex M. <alexmgit@protonmail.com>"]
+edition = "2018"
+repository = "https://github.com/newAM/corsairmi-rs"
+license = "MIT"
+description = "Read data from Corsair RMi and HXi series power supplies."
+readme = "README.md"
+keywords = ["corsair", "power-supply"]
+categories = ["hardware-support"]
+homepage = "https://github.com/newAM/corsairmi-rs"
+
+[badges]
+maintenance = { status = "experimental" }
+
+[dependencies]
+libc = "0.2"
