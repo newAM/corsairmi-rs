@@ -125,7 +125,7 @@ pub struct RailSample {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(clippy::non_snake_case)]
+#[allow(non_snake_case)]
 struct hidraw_devinfo {
     bustype: u32,
     vendor: u16,
@@ -526,6 +526,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn half_convert() {
         assert_eq!(half(0), 0.0);
         assert_eq!(half(0xF087), 33.75);
