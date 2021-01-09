@@ -245,22 +245,15 @@ impl PowerSupply {
     }
 
     fn read(&mut self, cmd: &[u8; 3], buf: &mut [u8]) -> io::Result<()> {
-        let num: usize = self.f.write(cmd)?;
-        if num != cmd.len() {
+        self.f.write_all(cmd)?;
+        self.f.read_exact(buf)?;
+        if buf[0] != cmd[0] || buf[1] != cmd[1] {
             Err(io::Error::new(
                 ErrorKind::Other,
-                "Failed to write entire buffer to power supply",
+                "Unexpected response from power supply",
             ))
         } else {
-            self.f.read_exact(buf)?;
-            if buf[0] != cmd[0] || buf[1] != cmd[1] {
-                Err(io::Error::new(
-                    ErrorKind::Other,
-                    "Unexpected response from power supply",
-                ))
-            } else {
-                Ok(())
-            }
+            Ok(())
         }
     }
 
