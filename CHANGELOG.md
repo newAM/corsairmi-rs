@@ -6,8 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
-- Changed the `std::io::Error` upon write failure from
-  `std::io::ErrorKind::Other` to `std::io::ErrorKind::Interrupted`
+- Changed the write failure error from `std::io::ErrorKind::Other` to
+  `std::io::ErrorKind::Interrupted`.
+- Added a `list` function to list power supply device paths.
 
 ## [0.1.0] - 2021-01-07
 - Initial release

@@ -17,10 +17,11 @@
 //! [notaz/corsairmi]: https://github.com/notaz/corsairmi
 
 use std::{
-    fs::{File, OpenOptions},
+    ffi::OsString,
+    fs::{self, File, OpenOptions},
     io::{self, ErrorKind, Read, Write},
     os::unix::io::AsRawFd,
-    path::Path,
+    path::{Path, PathBuf},
     time::Duration,
 };
 
@@ -170,6 +171,79 @@ impl std::fmt::Display for OpenError {
 }
 
 impl std::error::Error for OpenError {}
+
+/// Parses the USB (VID, PID) from the file path component.
+///
+/// The component is in the form of `0003:046D:C083.0006`.
+fn parse_component(component: Option<OsString>) -> Option<(u16, u16)> {
+    let component = component?;
+    let data: &str = (&component).to_str()?;
+    if data.len() < 14 {
+        None
+    } else {
+        let vid: u16 = u16::from_str_radix(&data[5..9], 16).ok()?;
+        let pid: u16 = u16::from_str_radix(&data[10..14], 16).ok()?;
+        Some((vid, pid))
+    }
+}
+
+/// Returns `true` if the VID and PID correspond to a valid power supply.
+fn valid_vid_pid(vid: u16, pid: u16) -> bool {
+    vid == VID && MODELS.iter().find(|m| m.pid() == pid).is_some()
+}
+
+/// Last component of a pathbuf, if it exists.
+fn last_component(p: &PathBuf) -> Option<OsString> {
+    Some(p.components().into_iter().last()?.as_os_str().to_owned())
+}
+
+/// List power supply device paths.
+///
+/// This works by reading the USB vendor ID (VID) and product ID (PID) under
+/// `/sys/bus/usb/drivers/usbhid/{}/modalias` and comparing them to the known
+/// VID/PID.
+///
+/// Typically these files are accessible without super user permissions.
+///
+/// # Example
+///
+/// ```
+/// let mut list = corsairmi::list()?;
+/// if let Some(path) = list.pop() {
+///     let mut psu = corsairmi::PowerSupply::open(path)?;
+///     // call psu methods here
+/// } else {
+///     eprintln!("No PSUs found");
+/// }
+/// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
+/// ```
+pub fn list() -> io::Result<Vec<PathBuf>> {
+    let mut ret: Vec<PathBuf> = Vec::new();
+    let sys_class_hidraw: &Path = Path::new("/sys/class/hidraw/");
+
+    if sys_class_hidraw.is_dir() {
+        for entry in fs::read_dir(sys_class_hidraw)? {
+            if let Ok(mut link) = entry?.path().read_link() {
+                if let Some(hidrawx) = last_component(&link) {
+                    link.pop(); // e.g. hidraw9
+                    link.pop(); // e.g. hidraw
+                    if let Some((vid, pid)) = parse_component(last_component(&link)) {
+                        if valid_vid_pid(vid, pid) {
+                            let mut dev: PathBuf = PathBuf::from("/dev/");
+                            dev.push(hidrawx);
+                            if dev.exists() {
+                                ret.push(dev);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ret.sort();
+    ret.dedup();
+    Ok(ret)
+}
 
 /// Power supply.
 #[derive(Debug)]
@@ -537,5 +611,43 @@ mod tests {
         assert_eq!(half(0xD0D3), 3.296875);
         assert_eq!(half(0xE00D), 0.8125);
         assert_eq!(half(0xF805), 2.5);
+    }
+
+    #[test]
+    fn parse_component_some() {
+        assert_eq!(
+            parse_component(Some(OsString::from("0000:1B1C:1C06.000A"))),
+            Some((0x1B1C, 0x1C06))
+        );
+        assert_eq!(
+            parse_component(Some(OsString::from("0000:1b1c:1c06.000a"))),
+            Some((0x1B1C, 0x1C06))
+        );
+        assert_eq!(
+            parse_component(Some(OsString::from("0000:1B1C:1C06"))),
+            Some((0x1B1C, 0x1C06))
+        );
+        assert_eq!(
+            parse_component(Some(OsString::from("0000:1B1C:1C06.000AAAAAAAAA"))),
+            Some((0x1B1C, 0x1C06)),
+        );
+    }
+
+    #[test]
+    fn parse_component_none() {
+        assert_eq!(parse_component(None), None);
+        assert_eq!(
+            parse_component(Some(OsString::from("0000:1B1Z:1C06.000A"))),
+            None,
+        );
+
+        assert_eq!(parse_component(Some(OsString::from("0000:1B1C:1C0"))), None);
+    }
+
+    #[test]
+    fn test_valid_vid_pid() {
+        assert!(valid_vid_pid(VID, Model::HX850i.pid()));
+        assert!(!valid_vid_pid(0x1234, Model::HX850i.pid()));
+        assert!(!valid_vid_pid(VID, 0x1234));
     }
 }
