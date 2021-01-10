@@ -4,6 +4,10 @@
 //!
 //! This crate is based off of this implementation in C: [notaz/corsairmi]
 //!
+//! # Features
+//!
+//! An ansynchronous implementation is avaliable with the `tokio` feature flag.
+//!
 //! # Example
 //!
 //! ```no_run
@@ -43,6 +47,11 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+#[cfg(feature = "tokio")]
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+mod cmd;
 
 /// Corsair vendor ID.
 pub const VID: u16 = 0x1B1C;
@@ -103,7 +112,8 @@ pub const MODELS: [Model; 9] = [
 
 /// Power supply output rail.
 ///
-/// This is an input argument for [`PowerSupply::rail`].
+/// This is an input argument for [`PowerSupply::output_select`] and
+/// [`AsyncPowerSupply::output_select`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Rail {
     /// 12V rail.
@@ -115,7 +125,7 @@ pub enum Rail {
 }
 
 impl Rail {
-    pub(crate) fn idx(&self) -> u8 {
+    pub(crate) const fn idx(&self) -> u8 {
         match self {
             Rail::Rail12v => 0,
             Rail::Rail5v => 1,
@@ -257,6 +267,45 @@ pub fn list() -> io::Result<Vec<PathBuf>> {
     Ok(ret)
 }
 
+fn open<F>(f: F) -> Result<(F, Model), OpenError>
+where
+    F: AsRawFd,
+{
+    // Only one IOCTL is needed for this crate.
+    // I did not use the nix crate as it greatly increased compile times.
+    const IOC_READ: libc::c_ulong = 2;
+    const IOC_NRBITS: libc::c_ulong = 8;
+    const IOC_TYPEBITS: libc::c_ulong = 8;
+    const IOC_SIZEBITS: libc::c_ulong = 14;
+    const IOC_NRSHIFT: libc::c_ulong = 0;
+    const IOC_TYPESHIFT: libc::c_ulong = IOC_NRSHIFT + IOC_NRBITS;
+    const IOC_SIZESHIFT: libc::c_ulong = IOC_TYPESHIFT + IOC_TYPEBITS;
+    const IOC_DIRSHIFT: libc::c_ulong = IOC_SIZESHIFT + IOC_SIZEBITS;
+    const HIDIOCGRAWINFO: libc::c_ulong = (IOC_READ << IOC_DIRSHIFT)
+        | ((b'H' as libc::c_ulong) << IOC_TYPESHIFT)
+        | (0x03 << IOC_NRSHIFT)
+        | (std::mem::size_of::<hidraw_devinfo>() << IOC_SIZESHIFT) as libc::c_ulong;
+
+    let mut info = hidraw_devinfo {
+        bustype: u32::MAX,
+        vendor: u16::MAX,
+        product: u16::MAX,
+    };
+    let fd = f.as_raw_fd();
+    // safety: `fd` will not be dropped until `f` is dropped
+    let rc = unsafe { libc::ioctl(fd, HIDIOCGRAWINFO, &mut info) };
+
+    if rc == -1 {
+        Err(OpenError::Io(io::Error::last_os_error()))
+    } else if info.vendor != VID {
+        Err(OpenError::InvalidVendorId(info.vendor))
+    } else if let Some(model) = MODELS.iter().find(|m| m.pid() == info.product) {
+        Ok((f, *model))
+    } else {
+        Err(OpenError::InvalidProductId(info.product))
+    }
+}
+
 /// Power supply.
 #[derive(Debug)]
 pub struct PowerSupply {
@@ -278,40 +327,8 @@ impl PowerSupply {
     /// ```
     pub fn open<P: AsRef<Path>>(path: P) -> Result<PowerSupply, OpenError> {
         let f: File = OpenOptions::new().read(true).write(true).open(path)?;
-
-        // Only one IOCTL is needed for this crate.
-        // I did not use the nix crate as it greatly increased compile times.
-        const IOC_READ: libc::c_ulong = 2;
-        const IOC_NRBITS: libc::c_ulong = 8;
-        const IOC_TYPEBITS: libc::c_ulong = 8;
-        const IOC_SIZEBITS: libc::c_ulong = 14;
-        const IOC_NRSHIFT: libc::c_ulong = 0;
-        const IOC_TYPESHIFT: libc::c_ulong = IOC_NRSHIFT + IOC_NRBITS;
-        const IOC_SIZESHIFT: libc::c_ulong = IOC_TYPESHIFT + IOC_TYPEBITS;
-        const IOC_DIRSHIFT: libc::c_ulong = IOC_SIZESHIFT + IOC_SIZEBITS;
-        const HIDIOCGRAWINFO: libc::c_ulong = (IOC_READ << IOC_DIRSHIFT)
-            | ((b'H' as libc::c_ulong) << IOC_TYPESHIFT)
-            | (0x03 << IOC_NRSHIFT)
-            | (std::mem::size_of::<hidraw_devinfo>() << IOC_SIZESHIFT) as libc::c_ulong;
-
-        let mut info = hidraw_devinfo {
-            bustype: u32::MAX,
-            vendor: u16::MAX,
-            product: u16::MAX,
-        };
-        let fd = f.as_raw_fd();
-        // safety: `fd` will not be dropped until `f` is dropped
-        let rc = unsafe { libc::ioctl(fd, HIDIOCGRAWINFO, &mut info) };
-
-        if rc == -1 {
-            Err(OpenError::Io(io::Error::last_os_error()))
-        } else if info.vendor != VID {
-            Err(OpenError::InvalidVendorId(info.vendor))
-        } else if let Some(model) = MODELS.iter().find(|m| m.pid() == info.product) {
-            Ok(PowerSupply { f, model: *model })
-        } else {
-            Err(OpenError::InvalidProductId(info.product))
-        }
+        let (f, model) = open(f)?;
+        Ok(PowerSupply { f, model })
     }
 
     /// Get the power supply model.
@@ -326,7 +343,7 @@ impl PowerSupply {
     /// println!("PSU model: {:?}", psu.model());
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
-    pub fn model(&self) -> Model {
+    pub const fn model(&self) -> Model {
         self.model
     }
 
@@ -377,7 +394,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn pc_uptime(&mut self) -> io::Result<Duration> {
-        let uptime: u32 = self.read_u32(0xD2)?;
+        let uptime: u32 = self.read_u32(cmd::PC_UPTIME)?;
         Ok(Duration::from_secs(u64::from(uptime)))
     }
 
@@ -397,7 +414,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn uptime(&mut self) -> io::Result<Duration> {
-        let uptime: u32 = self.read_u32(0xD1)?;
+        let uptime: u32 = self.read_u32(cmd::UPTIME)?;
         Ok(Duration::from_secs(u64::from(uptime)))
     }
 
@@ -417,7 +434,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn name(&mut self) -> io::Result<String> {
-        self.read_string(&[0xfe, 0x03, 0x00])
+        self.read_string(&cmd::NAME)
     }
 
     /// Vendor name.
@@ -433,7 +450,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn vendor(&mut self) -> io::Result<String> {
-        self.read_string(&[0x03, 0x99, 0x00])
+        self.read_string(&cmd::VENDOR)
     }
 
     /// Product name.
@@ -452,7 +469,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn product(&mut self) -> io::Result<String> {
-        self.read_string(&[0x03, 0x9A, 0x00])
+        self.read_string(&cmd::PRODUCT)
     }
 
     /// Temperature reading in celsius.
@@ -470,7 +487,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn temp1(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x8D)?))
+        Ok(half(self.read_u16(cmd::TEMP1)?))
     }
 
     /// Temperature reading in celsius.
@@ -488,7 +505,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn temp2(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x8E)?))
+        Ok(half(self.read_u16(cmd::TEMP2)?))
     }
 
     /// Fan rotations per minute.
@@ -504,7 +521,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn rpm(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x90)?))
+        Ok(half(self.read_u16(cmd::RPM)?))
     }
 
     /// Input voltage in volts.
@@ -520,7 +537,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn input_voltage(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x88)?))
+        Ok(half(self.read_u16(cmd::IN_VOLTAGE)?))
     }
 
     /// Input power in watts.
@@ -536,7 +553,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn input_power(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0xEE)?))
+        Ok(half(self.read_u16(cmd::IN_POWER)?))
     }
 
     /// Input current in amps.
@@ -578,7 +595,7 @@ impl PowerSupply {
     /// ```
     pub fn output_select(&mut self, rail: Rail) -> io::Result<()> {
         debug_assert!(rail.idx() <= 3);
-        let cmd: [u8; 3] = [0x02, 0x00, rail.idx()];
+        let cmd: [u8; 3] = cmd::output_select(rail.idx());
         let mut buf: [u8; 2] = [0; 2];
         self.read(&cmd, &mut buf)?;
         Ok(())
@@ -599,7 +616,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn output_voltage(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x8B)?))
+        Ok(half(self.read_u16(cmd::OUT_VOLTAGE)?))
     }
 
     /// Get the output current in amps.
@@ -617,7 +634,7 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn output_current(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x8C)?))
+        Ok(half(self.read_u16(cmd::OUT_CURRENT)?))
     }
 
     /// Get the output power in watts.
@@ -635,7 +652,415 @@ impl PowerSupply {
     /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
     /// ```
     pub fn output_power(&mut self) -> io::Result<f32> {
-        Ok(half(self.read_u16(0x96)?))
+        Ok(half(self.read_u16(cmd::OUT_POWER)?))
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl From<PowerSupply> for AsyncPowerSupply {
+    fn from(psu: PowerSupply) -> Self {
+        AsyncPowerSupply {
+            f: psu.f.into(),
+            model: psu.model,
+        }
+    }
+}
+
+/// Power supply with asynchronous methods.
+///
+/// This requires the `tokio` feature.
+///
+/// This is extremely overkill for the ammount of IO the power supply requires,
+/// and the async runtime may actually slow things down depending on your
+/// application.
+#[derive(Debug)]
+#[cfg(feature = "tokio")]
+pub struct AsyncPowerSupply {
+    f: tokio::fs::File,
+    model: Model,
+}
+
+#[cfg(feature = "tokio")]
+impl AsyncPowerSupply {
+    /// Open the power supply by file path.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let psu: AsyncPowerSupply = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // call psu methods here
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn open<P: AsRef<Path>>(path: P) -> Result<AsyncPowerSupply, OpenError> {
+        let f: tokio::fs::File = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .await?;
+        let (f, model) = open(f)?;
+        Ok(AsyncPowerSupply { f, model })
+    }
+
+    /// Get the power supply model.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let psu: AsyncPowerSupply = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "PSU model: HX580i"
+    /// println!("PSU model: {:?}", psu.model());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub const fn model(&self) -> Model {
+        self.model
+    }
+
+    async fn read(&mut self, cmd: &[u8; 3], buf: &mut [u8]) -> io::Result<()> {
+        self.f.write_all(cmd).await?;
+        self.f.read_exact(buf).await?;
+        if buf[0] != cmd[0] || buf[1] != cmd[1] {
+            Err(io::Error::new(
+                ErrorKind::Other,
+                "Unexpected response from power supply",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn read_string(&mut self, cmd: &[u8; 3]) -> io::Result<String> {
+        let mut buf: [u8; 64] = [0; 64];
+        self.read(cmd, &mut buf).await?;
+        let null_term: usize = buf.iter().position(|x| *x == 0).unwrap_or(buf.len());
+        Ok(String::from_utf8_lossy(&buf[2..null_term]).to_string())
+    }
+
+    async fn read_u32(&mut self, reg: u8) -> io::Result<u32> {
+        let mut buf: [u8; 6] = [0; 6];
+        self.read(&[0x03, reg, 0x0], &mut buf).await?;
+        Ok(u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]))
+    }
+
+    async fn read_u16(&mut self, reg: u8) -> io::Result<u16> {
+        let mut buf: [u8; 4] = [0; 4];
+        self.read(&[0x03, reg, 0x0], &mut buf).await?;
+        Ok(u16::from_le_bytes([buf[2], buf[3]]))
+    }
+
+    /// PC uptime.
+    ///
+    /// This is the duration that the PSU has been powering your PC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "PC uptime: 6935s"
+    /// println!("PC uptime: {:?}", psu.pc_uptime().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn pc_uptime(&mut self) -> io::Result<Duration> {
+        let uptime: u32 = self.read_u32(cmd::PC_UPTIME).await?;
+        Ok(Duration::from_secs(u64::from(uptime)))
+    }
+
+    /// Power supply uptime.
+    ///
+    /// This is the duration that the PSU has been connected to AC power,
+    /// regardless of whether or not your PC has been powered on.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "PSU uptime: 10535s"
+    /// println!("PSU uptime: {:?}", psu.uptime().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn uptime(&mut self) -> io::Result<Duration> {
+        let uptime: u32 = self.read_u32(cmd::UPTIME).await?;
+        Ok(Duration::from_secs(u64::from(uptime)))
+    }
+
+    /// Model name.
+    ///
+    /// This often contains the same information as [`PowerSupply::model`],
+    /// but this method is more expensive to call.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "PSU name: HX850i"
+    /// println!("PSU name: {:?}", psu.name().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn name(&mut self) -> io::Result<String> {
+        self.read_string(&cmd::NAME).await
+    }
+
+    /// Vendor name.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "PSU name: CORSAIR"
+    /// println!("PSU name: {:?}", psu.vendor().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn vendor(&mut self) -> io::Result<String> {
+        self.read_string(&cmd::VENDOR).await
+    }
+
+    /// Product name.
+    ///
+    /// This often contains the same information as [`PowerSupply::model`],
+    /// but this method is more expensive to call.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "PSU product: HX850i"
+    /// println!("PSU product: {:?}", psu.product().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn product(&mut self) -> io::Result<String> {
+        self.read_string(&cmd::PRODUCT).await
+    }
+
+    /// Temperature reading in celsius.
+    ///
+    /// I do not know what this is a temperature reading of.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "Temperature: 42.25"
+    /// println!("Temperature: {:.2}", psu.temp1().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn temp1(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::TEMP1).await?))
+    }
+
+    /// Temperature reading in celsius.
+    ///
+    /// I do not know what this is a temperature reading of.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "Temperature: 34.25"
+    /// println!("Temperature: {:.2}", psu.temp2().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn temp2(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::TEMP2).await?))
+    }
+
+    /// Fan rotations per minute.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "RPM: 0.0"
+    /// println!("RPM: {:.1}", psu.rpm().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn rpm(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::RPM).await?))
+    }
+
+    /// Input voltage in volts.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "Input voltage: 115.0"
+    /// println!("Input voltage: {:.1}", psu.input_voltage().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn input_voltage(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::IN_VOLTAGE).await?))
+    }
+
+    /// Input power in watts.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "Input power: 18.0"
+    /// println!("Input power: {:.1}", psu.input_power().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn input_power(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::IN_POWER).await?))
+    }
+
+    /// Input current in amps.
+    ///
+    /// This is derived from the input power and input voltage.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::AsyncPowerSupply;
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// // e.g. "Input current: 0.16"
+    /// println!("Input current: {:.2}", psu.input_current().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn input_current(&mut self) -> io::Result<f32> {
+        Ok(self.input_power().await? / self.input_voltage().await?)
+    }
+
+    /// Select the output rail to read from.
+    ///
+    /// This should be called before calling
+    /// [`AsyncPowerSupply::output_voltage`],
+    /// [`AsyncPowerSupply::output_current`],
+    /// or [`AsyncPowerSupply::output_power`].
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{AsyncPowerSupply, Rail, RAILS};
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// for rail in RAILS.iter() {
+    ///     psu.output_select(*rail).await?;
+    ///     println!("{} output voltage: {}V", rail, psu.output_voltage().await?);
+    ///     println!("{} output current: {}A", rail, psu.output_current().await?);
+    ///     println!("{} output power: {}W", rail, psu.output_power().await?);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn output_select(&mut self, rail: Rail) -> io::Result<()> {
+        debug_assert!(rail.idx() <= 3);
+        let cmd: [u8; 3] = cmd::output_select(rail.idx());
+        let mut buf: [u8; 2] = [0; 2];
+        self.read(&cmd, &mut buf).await?;
+        Ok(())
+    }
+
+    /// Get the output voltage in volts.
+    ///
+    /// Call [`AsyncPowerSupply::output_select`] to select the rail to read from.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{AsyncPowerSupply, Rail};
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// psu.output_select(Rail::Rail12v).await?;
+    /// println!("12V rail output voltage: {}V", psu.output_voltage().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn output_voltage(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::OUT_VOLTAGE).await?))
+    }
+
+    /// Get the output current in amps.
+    ///
+    /// Call [`AsyncPowerSupply::output_select`] to select the rail to read from.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{AsyncPowerSupply, Rail};
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// psu.output_select(Rail::Rail12v).await?;
+    /// println!("12V rail output current: {}A", psu.output_current().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn output_current(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::OUT_CURRENT).await?))
+    }
+
+    /// Get the output power in watts.
+    ///
+    /// Call [`AsyncPowerSupply::output_select`] to select the rail to read from.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{AsyncPowerSupply, Rail};
+    ///
+    /// # async fn dox() -> Result<(), corsairmi::OpenError> {
+    /// let mut psu = AsyncPowerSupply::open("/dev/hidraw5").await?;
+    /// psu.output_select(Rail::Rail12v).await?;
+    /// println!("12V rail output power: {}W", psu.output_power().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn output_power(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(cmd::OUT_POWER).await?))
     }
 }
 

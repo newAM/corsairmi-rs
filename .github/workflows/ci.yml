@@ -16,7 +16,8 @@ jobs:
         with:
           toolchain: stable
       - run: RUSTFLAGS="-D warnings" cargo build --verbose
-      - run: cargo test --verbose
+      - run: RUSTFLAGS="-D warnings" cargo build --verbose --features tokio
+      - run: cargo test --verbose --all-features
 
   clippy_check:
     name: Clippy
@@ -51,7 +52,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: cargo doc
+      - run: cargo doc --all-features
 
   release:
     name: crates.io release
