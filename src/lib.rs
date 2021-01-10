@@ -124,24 +124,18 @@ impl Rail {
     }
 }
 
+impl std::fmt::Display for Rail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Rail::Rail12v => write!(f, "12V"),
+            Rail::Rail5v => write!(f, "5V"),
+            Rail::Rail3v3 => write!(f, "3.3V"),
+        }
+    }
+}
+
 /// Array of all rails.
 pub const RAILS: [Rail; 3] = [Rail::Rail12v, Rail::Rail5v, Rail::Rail3v3];
-
-/// Output rail sample.
-///
-/// This is returned by [`PowerSupply::rail`].
-#[derive(Debug)]
-pub struct RailSample {
-    /// Current in amps.
-    pub current: f32,
-    /// Voltage in volts.
-    pub voltage: f32,
-    /// Power in watts.
-    ///
-    /// Note: On my power supply this often does not add up to the product of
-    /// current and voltage for some reason.
-    pub power: f32,
-}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -368,14 +362,6 @@ impl PowerSupply {
         Ok(u16::from_le_bytes([buf[2], buf[3]]))
     }
 
-    fn output_select(&mut self, output: u8) -> io::Result<()> {
-        debug_assert!(output <= 3);
-        let cmd: [u8; 3] = [0x02, 0x00, output];
-        let mut buf: [u8; 2] = [0; 2];
-        self.read(&cmd, &mut buf)?;
-        Ok(())
-    }
-
     /// PC uptime.
     ///
     /// This is the duration that the PSU has been powering your PC.
@@ -571,14 +557,85 @@ impl PowerSupply {
         Ok(self.input_power()? / self.input_voltage()?)
     }
 
-    /// Get the current, voltage, and power for an output rail.
-    pub fn rail(&mut self, rail: Rail) -> io::Result<RailSample> {
-        self.output_select(rail.idx())?;
-        Ok(RailSample {
-            voltage: half(self.read_u16(0x8B)?),
-            current: half(self.read_u16(0x8C)?),
-            power: half(self.read_u16(0x96)?),
-        })
+    /// Select the output rail to read from.
+    ///
+    /// This should be called before calling [`PowerSupply::output_voltage`],
+    /// [`PowerSupply::output_current`], or [`PowerSupply::output_power`].
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{PowerSupply, Rail, RAILS};
+    ///
+    /// let mut psu: PowerSupply = PowerSupply::open("/dev/hidraw5")?;
+    /// for rail in RAILS.iter() {
+    ///     psu.output_select(*rail)?;
+    ///     println!("{} output voltage: {}V", rail, psu.output_voltage()?);
+    ///     println!("{} output current: {}A", rail, psu.output_current()?);
+    ///     println!("{} output power: {}W", rail, psu.output_power()?);
+    /// }
+    /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn output_select(&mut self, rail: Rail) -> io::Result<()> {
+        debug_assert!(rail.idx() <= 3);
+        let cmd: [u8; 3] = [0x02, 0x00, rail.idx()];
+        let mut buf: [u8; 2] = [0; 2];
+        self.read(&cmd, &mut buf)?;
+        Ok(())
+    }
+
+    /// Get the output voltage in volts.
+    ///
+    /// Call [`PowerSupply::output_select`] to select the rail to read from.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{PowerSupply, Rail};
+    ///
+    /// let mut psu: PowerSupply = PowerSupply::open("/dev/hidraw5")?;
+    /// psu.output_select(Rail::Rail12v)?;
+    /// println!("12V rail output voltage: {}V", psu.output_voltage()?);
+    /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn output_voltage(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(0x8B)?))
+    }
+
+    /// Get the output current in amps.
+    ///
+    /// Call [`PowerSupply::output_select`] to select the rail to read from.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{PowerSupply, Rail};
+    ///
+    /// let mut psu: PowerSupply = PowerSupply::open("/dev/hidraw5")?;
+    /// psu.output_select(Rail::Rail12v)?;
+    /// println!("12V rail output current: {}A", psu.output_current()?);
+    /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn output_current(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(0x8C)?))
+    }
+
+    /// Get the output power in watts.
+    ///
+    /// Call [`PowerSupply::output_select`] to select the rail to read from.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use corsairmi::{PowerSupply, Rail};
+    ///
+    /// let mut psu: PowerSupply = PowerSupply::open("/dev/hidraw5")?;
+    /// psu.output_select(Rail::Rail12v)?;
+    /// println!("12V rail output power: {}W", psu.output_power()?);
+    /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn output_power(&mut self) -> io::Result<f32> {
+        Ok(half(self.read_u16(0x96)?))
     }
 }
 

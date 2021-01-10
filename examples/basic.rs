@@ -18,8 +18,10 @@ fn main() -> Result<(), OpenError> {
         println!("Input current: {:?} A", psu.input_current());
 
         for rail in RAILS.iter() {
-            let sample = psu.rail(*rail);
-            println!("{:?} sample: {:#?}", rail, sample);
+            psu.output_select(*rail)?;
+            println!("{} output voltage: {:?} V", *rail, psu.output_voltage());
+            println!("{} output current: {:?} A", *rail, psu.output_current());
+            println!("{} output power: {:?} W", *rail, psu.output_power());
         }
         Ok(())
     } else {
