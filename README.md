@@ -11,6 +11,10 @@ This uses the Linux HIDRAW interface to communicate with the power supply.
 
 This crate is based off of this implementation in C: [notaz/corsairmi]
 
+## Features
+
+An ansynchronous implementation is avaliable with the `tokio` feature flag.
+
 ## Example
 
 ```rust

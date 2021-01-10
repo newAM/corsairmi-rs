@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Implemented `std::fmt::Display` for the `Rail` enumeration.
+- Added `AsyncPowerSupply` with the `tokio` feature flag.
 
 ### Changed
 - Changed `rail` method which sampled the voltage, current, and power of a rail
