@@ -14,6 +14,25 @@
 //! # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
 //! ```
 //!
+//! # udev rules
+//!
+//! You will most likely want to update your udev rules so that you can access
+//! the power supply as a non superuser.
+//!
+//! These are my udev rules, you will need to update the `idProduct` field for
+//! the product ID of your power supply, you can figure this value out with
+//! `lsusb`, or by reading the source.
+//!
+//! Also note the value for `idProduct` must be **lowercase** hexadecimal.
+//!
+//! ```text
+//! # /etc/udev/rules.d/99-corsair.rules
+//! SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1b1c", ATTRS{idProduct}=="1c06", MODE="0666"
+//! ```
+//!
+//! udev rules can be reloaded with
+//! `sudo udevadm control --reload-rules && sudo udevadm trigger`
+//!
 //! [notaz/corsairmi]: https://github.com/notaz/corsairmi
 
 use std::{
