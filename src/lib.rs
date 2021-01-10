@@ -219,8 +219,7 @@ fn last_component(p: &PathBuf) -> Option<OsString> {
 /// List power supply device paths.
 ///
 /// This works by reading the USB vendor ID (VID) and product ID (PID) under
-/// `/sys/bus/usb/drivers/usbhid/{}/modalias` and comparing them to the known
-/// VID/PID.
+/// `/sys/class/hidraw` and comparing them to known IDs.
 ///
 /// Typically these files are accessible without super user permissions.
 ///
