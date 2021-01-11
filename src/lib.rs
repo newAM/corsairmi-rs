@@ -6,7 +6,7 @@
 //!
 //! # Features
 //!
-//! An ansynchronous implementation is avaliable with the `tokio` feature flag.
+//! An asynchronous implementation is available with the `tokio` feature flag.
 //!
 //! # Example
 //!
@@ -472,7 +472,7 @@ impl PowerSupply {
         self.read_string(&cmd::PRODUCT)
     }
 
-    /// Temperature reading in celsius.
+    /// Temperature reading in Celsius.
     ///
     /// I do not know what this is a temperature reading of.
     ///
@@ -490,7 +490,7 @@ impl PowerSupply {
         Ok(half(self.read_u16(cmd::TEMP1)?))
     }
 
-    /// Temperature reading in celsius.
+    /// Temperature reading in Celsius.
     ///
     /// I do not know what this is a temperature reading of.
     ///
@@ -670,7 +670,7 @@ impl From<PowerSupply> for AsyncPowerSupply {
 ///
 /// This requires the `tokio` feature.
 ///
-/// This is extremely overkill for the ammount of IO the power supply requires,
+/// This is extremely overkill for the amount of IO the power supply requires,
 /// and the async runtime may actually slow things down depending on your
 /// application.
 #[derive(Debug)]
@@ -858,7 +858,7 @@ impl AsyncPowerSupply {
         self.read_string(&cmd::PRODUCT).await
     }
 
-    /// Temperature reading in celsius.
+    /// Temperature reading in Celsius.
     ///
     /// I do not know what this is a temperature reading of.
     ///
@@ -878,7 +878,7 @@ impl AsyncPowerSupply {
         Ok(half(self.read_u16(cmd::TEMP1).await?))
     }
 
-    /// Temperature reading in celsius.
+    /// Temperature reading in Celsius.
     ///
     /// I do not know what this is a temperature reading of.
     ///

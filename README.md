@@ -13,7 +13,7 @@ This crate is based off of this implementation in C: [notaz/corsairmi]
 
 ## Features
 
-An ansynchronous implementation is avaliable with the `tokio` feature flag.
+An asynchronous implementation is available with the `tokio` feature flag.
 
 ## Example
 
