@@ -212,7 +212,7 @@ fn parse_component(component: Option<OsString>) -> Option<(u16, u16)> {
 
 /// Returns `true` if the VID and PID correspond to a valid power supply.
 fn valid_vid_pid(vid: u16, pid: u16) -> bool {
-    vid == VID && MODELS.iter().find(|m| m.pid() == pid).is_some()
+    vid == VID && MODELS.iter().any(|m| m.pid() == pid)
 }
 
 /// Last component of a pathbuf, if it exists.
@@ -306,6 +306,9 @@ where
     }
 }
 
+/// HID report length in bytes.
+const HID_REPORT_LEN: usize = 64;
+
 /// Power supply.
 #[derive(Debug)]
 pub struct PowerSupply {
@@ -347,35 +350,37 @@ impl PowerSupply {
         self.model
     }
 
-    fn read(&mut self, cmd: &[u8; 3], buf: &mut [u8]) -> io::Result<()> {
+    fn read(&mut self, cmd: &[u8; 3]) -> io::Result<[u8; HID_REPORT_LEN]> {
+        let mut buf: [u8; HID_REPORT_LEN] = [0; HID_REPORT_LEN];
         self.f.write_all(cmd)?;
-        self.f.read_exact(buf)?;
+        self.f.read_exact(&mut buf)?;
         if buf[0] != cmd[0] || buf[1] != cmd[1] {
             Err(io::Error::new(
                 ErrorKind::Other,
                 "Unexpected response from power supply",
             ))
         } else {
-            Ok(())
+            Ok(buf)
         }
     }
 
     fn read_string(&mut self, cmd: &[u8; 3]) -> io::Result<String> {
-        let mut buf: [u8; 64] = [0; 64];
-        self.read(cmd, &mut buf)?;
-        let null_term: usize = buf.iter().position(|x| *x == 0).unwrap_or(buf.len());
+        let buf = self.read(cmd)?;
+        let null_term: usize = buf
+            .iter()
+            .skip(2)
+            .position(|x| *x == 0)
+            .unwrap_or(buf.len());
         Ok(String::from_utf8_lossy(&buf[2..null_term]).to_string())
     }
 
     fn read_u32(&mut self, reg: u8) -> io::Result<u32> {
-        let mut buf: [u8; 6] = [0; 6];
-        self.read(&[0x03, reg, 0x0], &mut buf)?;
+        let buf = self.read(&[0x03, reg, 0x0])?;
         Ok(u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]))
     }
 
     fn read_u16(&mut self, reg: u8) -> io::Result<u16> {
-        let mut buf: [u8; 4] = [0; 4];
-        self.read(&[0x03, reg, 0x0], &mut buf)?;
+        let buf = self.read(&[0x03, reg, 0x0])?;
         Ok(u16::from_le_bytes([buf[2], buf[3]]))
     }
 
@@ -596,8 +601,7 @@ impl PowerSupply {
     pub fn output_select(&mut self, rail: Rail) -> io::Result<()> {
         debug_assert!(rail.idx() <= 3);
         let cmd: [u8; 3] = cmd::output_select(rail.idx());
-        let mut buf: [u8; 2] = [0; 2];
-        self.read(&cmd, &mut buf)?;
+        self.read(&cmd)?;
         Ok(())
     }
 
@@ -723,35 +727,33 @@ impl AsyncPowerSupply {
         self.model
     }
 
-    async fn read(&mut self, cmd: &[u8; 3], buf: &mut [u8]) -> io::Result<()> {
+    async fn read(&mut self, cmd: &[u8; 3]) -> io::Result<[u8; HID_REPORT_LEN]> {
+        let mut buf: [u8; HID_REPORT_LEN] = [0; HID_REPORT_LEN];
         self.f.write_all(cmd).await?;
-        self.f.read_exact(buf).await?;
+        self.f.read_exact(&mut buf).await?;
         if buf[0] != cmd[0] || buf[1] != cmd[1] {
             Err(io::Error::new(
                 ErrorKind::Other,
                 "Unexpected response from power supply",
             ))
         } else {
-            Ok(())
+            Ok(buf)
         }
     }
 
     async fn read_string(&mut self, cmd: &[u8; 3]) -> io::Result<String> {
-        let mut buf: [u8; 64] = [0; 64];
-        self.read(cmd, &mut buf).await?;
+        let buf = self.read(cmd).await?;
         let null_term: usize = buf.iter().position(|x| *x == 0).unwrap_or(buf.len());
         Ok(String::from_utf8_lossy(&buf[2..null_term]).to_string())
     }
 
     async fn read_u32(&mut self, reg: u8) -> io::Result<u32> {
-        let mut buf: [u8; 6] = [0; 6];
-        self.read(&[0x03, reg, 0x0], &mut buf).await?;
+        let buf = self.read(&[0x03, reg, 0x0]).await?;
         Ok(u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]))
     }
 
     async fn read_u16(&mut self, reg: u8) -> io::Result<u16> {
-        let mut buf: [u8; 4] = [0; 4];
-        self.read(&[0x03, reg, 0x0], &mut buf).await?;
+        let buf = self.read(&[0x03, reg, 0x0]).await?;
         Ok(u16::from_le_bytes([buf[2], buf[3]]))
     }
 
@@ -969,7 +971,9 @@ impl AsyncPowerSupply {
     /// # }
     /// ```
     pub async fn input_current(&mut self) -> io::Result<f32> {
-        Ok(self.input_power().await? / self.input_voltage().await?)
+        let power = self.input_power().await?;
+        let voltage = self.input_voltage().await?;
+        Ok(power / voltage)
     }
 
     /// Select the output rail to read from.
@@ -998,8 +1002,7 @@ impl AsyncPowerSupply {
     pub async fn output_select(&mut self, rail: Rail) -> io::Result<()> {
         debug_assert!(rail.idx() <= 3);
         let cmd: [u8; 3] = cmd::output_select(rail.idx());
-        let mut buf: [u8; 2] = [0; 2];
-        self.read(&cmd, &mut buf).await?;
+        self.read(&cmd).await?;
         Ok(())
     }
 
