@@ -365,13 +365,15 @@ impl PowerSupply {
     }
 
     fn read_string(&mut self, cmd: &[u8; 3]) -> io::Result<String> {
+        const RESPONSE_BYTES: usize = 2;
         let buf = self.read(cmd)?;
         let null_term: usize = buf
             .iter()
-            .skip(2)
+            .skip(RESPONSE_BYTES)
             .position(|x| *x == 0)
-            .unwrap_or(buf.len());
-        Ok(String::from_utf8_lossy(&buf[2..null_term]).to_string())
+            .unwrap_or(buf.len() - RESPONSE_BYTES)
+            + RESPONSE_BYTES;
+        Ok(String::from_utf8_lossy(&buf[RESPONSE_BYTES..null_term]).to_string())
     }
 
     fn read_u32(&mut self, reg: u8) -> io::Result<u32> {
@@ -742,9 +744,15 @@ impl AsyncPowerSupply {
     }
 
     async fn read_string(&mut self, cmd: &[u8; 3]) -> io::Result<String> {
+        const RESPONSE_BYTES: usize = 2;
         let buf = self.read(cmd).await?;
-        let null_term: usize = buf.iter().position(|x| *x == 0).unwrap_or(buf.len());
-        Ok(String::from_utf8_lossy(&buf[2..null_term]).to_string())
+        let null_term: usize = buf
+            .iter()
+            .skip(RESPONSE_BYTES)
+            .position(|x| *x == 0)
+            .unwrap_or(buf.len() - RESPONSE_BYTES)
+            + RESPONSE_BYTES;
+        Ok(String::from_utf8_lossy(&buf[RESPONSE_BYTES..null_term]).to_string())
     }
 
     async fn read_u32(&mut self, reg: u8) -> io::Result<u32> {
