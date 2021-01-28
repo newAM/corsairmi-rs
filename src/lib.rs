@@ -45,10 +45,12 @@ use std::{
     ffi::OsString,
     fs::{self, File, OpenOptions},
     io::{self, ErrorKind, Read, Write},
-    os::unix::io::AsRawFd,
     path::{Path, PathBuf},
     time::Duration,
 };
+
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
 
 mod cmd;
 
@@ -246,6 +248,19 @@ fn last_component(p: &PathBuf) -> Option<OsString> {
 /// # Ok::<(), std::boxed::Box<dyn std::error::Error>>(())
 /// ```
 pub fn list() -> io::Result<Vec<PathBuf>> {
+    cfg_if::cfg_if! {
+        if #[cfg(unix)] {
+            list_unix()
+        } else if #[cfg(windows)] {
+            list_windows()
+        } else {
+            std::compile_error!("Your target is not supported")
+        }
+    }
+}
+
+#[cfg(unix)]
+fn list_unix() {
     let mut ret: Vec<PathBuf> = Vec::new();
     let sys_class_hidraw: &Path = Path::new("/sys/class/hidraw/");
 
@@ -273,6 +288,65 @@ pub fn list() -> io::Result<Vec<PathBuf>> {
     Ok(ret)
 }
 
+#[cfg(windows)]
+fn list_windows() -> io::Result<Vec<PathBuf>> {
+    use std::convert::TryFrom;
+    use winapi::shared::guiddef::GUID;
+    use winapi::shared::minwindef::{BOOL, DWORD, FALSE};
+    use winapi::um::setupapi::{
+        SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsA, DIGCF_DEVICEINTERFACE, DIGCF_PRESENT,
+        SP_DEVICE_INTERFACE_DATA, SP_DEVINFO_DATA,
+    };
+    let mut ret: Vec<PathBuf> = Vec::new();
+
+    let interface_class_guid: GUID = GUID {
+        Data1: 0x4d1e55b2,
+        Data2: 0xf16f,
+        Data3: 0x11cf,
+        Data4: [0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30],
+    };
+
+    let device_info_set = unsafe {
+        SetupDiGetClassDevsA(
+            &interface_class_guid,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            DIGCF_PRESENT | DIGCF_DEVICEINTERFACE,
+        )
+    };
+
+    let device_index: DWORD = 0;
+
+    let mut device_interface_data: SP_DEVICE_INTERFACE_DATA = SP_DEVICE_INTERFACE_DATA {
+        cbSize: u32::try_from(std::mem::size_of::<SP_DEVICE_INTERFACE_DATA>()).unwrap(),
+        InterfaceClassGuid: unsafe { std::mem::zeroed::<GUID>() },
+        Flags: 0,
+        Reserved: 0,
+    };
+
+    loop {
+        let res: BOOL = unsafe {
+            SetupDiEnumDeviceInterfaces(
+                device_info_set,
+                std::ptr::null_mut(),
+                &interface_class_guid,
+                device_index,
+                &mut device_interface_data,
+            )
+        };
+
+        // no more devices
+        if res == FALSE {
+            break;
+        }
+
+        todo!()
+    }
+
+    todo!()
+}
+
+#[cfg(unix)]
 fn open<F>(f: F) -> Result<(F, Model), OpenError>
 where
     F: AsRawFd,
@@ -322,6 +396,7 @@ pub struct PowerSupply {
     model: Model,
 }
 
+#[cfg(unix)]
 impl PowerSupply {
     /// Open the power supply by file path.
     ///
