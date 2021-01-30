@@ -1,10 +1,10 @@
-use corsairmi::{AsyncPowerSupply, OpenError, RAILS};
+use corsairmi::{aio::PowerSupply, OpenError, RAILS};
 
 #[tokio::main]
 async fn main() -> Result<(), OpenError> {
     let mut list = corsairmi::list()?;
     if let Some(path) = list.pop() {
-        let mut psu = AsyncPowerSupply::open(path).await?;
+        let mut psu = PowerSupply::open(path).await?;
         println!("Model: {:?}", psu.model());
         println!("PC uptime: {:?}", psu.pc_uptime().await);
         println!("PSU uptime: {:?}", psu.uptime().await);
