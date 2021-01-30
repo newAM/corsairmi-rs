@@ -1,6 +1,6 @@
 [package]
 name = "corsairmi"
-version = "0.3.2"
+version = "0.4.0"  # remember to update html_root_url
 authors = ["Alex M. <alexmgit@protonmail.com>"]
 edition = "2018"
 repository = "https://github.com/newAM/corsairmi-rs"
@@ -22,9 +22,13 @@ version = "1"
 features = ["fs"]
 optional = true
 
+[dev-dependencies]
+version-sync = "0.9"
+
 [dev-dependencies.tokio]
 version = "1"
 features = ["full"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
