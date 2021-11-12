@@ -1,8 +1,8 @@
 [package]
 name = "corsairmi"
 version = "0.4.0"  # remember to update html_root_url
-authors = ["Alex M. <alexmgit@protonmail.com>"]
-edition = "2018"
+authors = ["Alex Martens <alexmgit@protonmail.com>"]
+edition = "2021"
 repository = "https://github.com/newAM/corsairmi-rs"
 license = "MIT"
 description = "Read data from Corsair RMi and HXi series power supplies."
