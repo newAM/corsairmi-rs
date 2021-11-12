@@ -56,7 +56,6 @@ mod cmd;
 ///
 /// This requires the `tokio` feature flag.
 #[cfg(feature = "tokio")]
-#[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
 pub mod aio;
 
 /// Corsair vendor ID.
