@@ -11,10 +11,6 @@ This uses the Linux HIDRAW interface to communicate with the power supply.
 
 This crate is based off of this implementation in C: [notaz/corsairmi]
 
-## Features
-
-An asynchronous implementation is available with the `tokio` feature flag.
-
 ## Example
 
 ```rust
@@ -23,6 +19,10 @@ use corsairmi::PowerSupply;
 let mut psu: PowerSupply = PowerSupply::open("/dev/hidraw5")?;
 println!("Power consumption: {:.1} Watts", psu.input_power()?);
 ```
+
+## Features
+
+An asynchronous implementation is available with the `tokio` feature flag.
 
 ## udev rules
 

@@ -38,8 +38,7 @@
 //! `sudo udevadm control --reload-rules && sudo udevadm trigger`
 //!
 //! [notaz/corsairmi]: https://github.com/notaz/corsairmi
-#![doc(html_root_url = "https://docs.rs/corsairmi/0.4.0")]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg), feature(doc_auto_cfg))]
 
 use std::{
     ffi::OsString,
