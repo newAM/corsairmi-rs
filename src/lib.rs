@@ -205,13 +205,9 @@ impl std::error::Error for OpenError {}
 fn parse_component(component: Option<OsString>) -> Option<(u16, u16)> {
     let component = component?;
     let data: &str = (&component).to_str()?;
-    if data.len() < 14 {
-        None
-    } else {
-        let vid: u16 = u16::from_str_radix(&data[5..9], 16).ok()?;
-        let pid: u16 = u16::from_str_radix(&data[10..14], 16).ok()?;
-        Some((vid, pid))
-    }
+    let vid: u16 = u16::from_str_radix(data.get(5..9)?, 16).ok()?;
+    let pid: u16 = u16::from_str_radix(data.get(10..14)?, 16).ok()?;
+    Some((vid, pid))
 }
 
 /// Returns `true` if the VID and PID correspond to a valid power supply.
@@ -236,8 +232,7 @@ fn last_component(p: &Path) -> Option<OsString> {
 /// ```
 /// let mut list = corsairmi::list()?;
 /// if let Some(path) = list.pop() {
-///     let mut psu = corsairmi::PowerSupply::open(path)?;
-///     // call psu methods here
+///     // open PSU here
 /// } else {
 ///     eprintln!("No PSUs found");
 /// }
