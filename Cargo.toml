@@ -17,7 +17,7 @@ libc = "0.2"
 
 [dependencies.tokio]
 version = "1"
-features = ["fs"]
+features = ["fs", "io-util"]
 optional = true
 
 [dev-dependencies.tokio]

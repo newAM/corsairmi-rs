@@ -4,7 +4,6 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature = "tokio")]
 use tokio::{
     fs::{File, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
