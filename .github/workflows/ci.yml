@@ -12,17 +12,22 @@ name: CI
 
 jobs:
   build_and_test:
-    name: Rust project
+    name: Build and Test
     runs-on: ubuntu-latest
     env: {"RUSTFLAGS": "-D warnings"}
+    strategy:
+      matrix:
+        toolchain:
+          - "1.56" # Update MSRV in Cargo.toml
+          - "stable"
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: cargo build --verbose
-      - run: cargo build --verbose --features tokio
-      - run: cargo test --verbose --all-features
+      - run: cargo build
+      - run: cargo build --features tokio
+      - run: cargo test --all-features
 
   clippy:
     name: Clippy
@@ -36,31 +41,35 @@ jobs:
       - run: cargo clippy --all-features -- --deny warnings
 
   format:
-    name: Rust Format
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           components: rustfmt
-      - run: cargo fmt -- --check
+      - run: cargo +nightly fmt -- --check
 
   docs:
     name: docs
     runs-on: ubuntu-latest
-    env: {"RUSTDOCFLAGS": "-D warnings"}
+    env: {"RUSTDOCFLAGS": "-D warnings --cfg docsrs"}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
-      - run: cargo doc --all-features
+          toolchain: nightly
+      - run: cargo +nightly rustdoc --all-features
 
   release:
     name: crates.io release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build_and_test, clippy, format, docs]
+    needs:
+      - build_and_test
+      - clippy
+      - format
+      - docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
