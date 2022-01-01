@@ -25,6 +25,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
+          override: true
       - run: cargo build
       - run: cargo build --features tokio
       - run: cargo test --all-features
