@@ -56,8 +56,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustdoc
       - run: cargo +nightly rustdoc --all-features
 
   release:
