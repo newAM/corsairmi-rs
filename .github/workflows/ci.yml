@@ -22,10 +22,7 @@ jobs:
           - "stable"
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          override: true
+      - uses: dtolnay/rust-toolchain@${{ matrix.toolchain }}
       - run: cargo build
       - run: cargo build --features tokio
       - run: cargo test --all-features
@@ -35,10 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: clippy
+      - uses: dtolnay/rust-toolchain@stable
       - run: cargo clippy --all-features -- --deny warnings
 
   format:
@@ -46,10 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          components: rustfmt
+      - uses: dtolnay/rust-toolchain@nightly
       - run: cargo +nightly fmt -- --check
 
   docs:
@@ -58,9 +49,7 @@ jobs:
     env: {"RUSTDOCFLAGS": "-D warnings --cfg docsrs"}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
+      - uses: dtolnay/rust-toolchain@nightly
       - run: cargo +nightly rustdoc --all-features
 
   release:
@@ -74,9 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+      - uses: dtolnay/rust-toolchain@stable
       - run: cargo publish --token ${CRATES_IO_TOKEN}
         env:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
