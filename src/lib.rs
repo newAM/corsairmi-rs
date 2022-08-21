@@ -204,7 +204,7 @@ impl std::error::Error for OpenError {}
 /// The component is in the form of `0003:046D:C083.0006`.
 fn parse_component(component: Option<OsString>) -> Option<(u16, u16)> {
     let component = component?;
-    let data: &str = (&component).to_str()?;
+    let data: &str = component.to_str()?;
     let vid: u16 = u16::from_str_radix(data.get(5..9)?, 16).ok()?;
     let pid: u16 = u16::from_str_radix(data.get(10..14)?, 16).ok()?;
     Some((vid, pid))
