@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Added support for the HX1500i.
+- Added support for the AX1500i and HX1500i models.
   - This is a potentially breaking change because the `MODELS` array has been expanded.
 
 ## [1.0.0] - 2021-12-27
