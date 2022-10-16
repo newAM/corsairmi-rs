@@ -64,16 +64,17 @@ pub const VID: u16 = 0x1B1C;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Model {
-    RM650i,
-    RM750i,
-    RM850i,
-    RM1000i,
+    AX1500i,
     HX650i,
     HX750i,
     HX850i,
     HX1000i,
     HX1200i,
     HX1500i,
+    RM650i,
+    RM750i,
+    RM850i,
+    RM1000i,
 }
 
 impl Model {
@@ -89,32 +90,34 @@ impl Model {
     /// ```
     pub fn pid(&self) -> u16 {
         match self {
-            Model::RM650i => 0x1c0a,
-            Model::RM750i => 0x1c0b,
-            Model::RM850i => 0x1c0c,
-            Model::RM1000i => 0x1c0d,
+            Model::AX1500i => 0x1c02,
             Model::HX650i => 0x1c04,
             Model::HX750i => 0x1c05,
             Model::HX850i => 0x1c06,
             Model::HX1000i => 0x1c07,
             Model::HX1200i => 0x1c08,
             Model::HX1500i => 0x1c1f,
+            Model::RM650i => 0x1c0a,
+            Model::RM750i => 0x1c0b,
+            Model::RM850i => 0x1c0c,
+            Model::RM1000i => 0x1c0d,
         }
     }
 }
 
 /// Array of all models.
-pub const MODELS: [Model; 10] = [
-    Model::RM650i,
-    Model::RM750i,
-    Model::RM850i,
-    Model::RM1000i,
+pub const MODELS: [Model; 11] = [
+    Model::AX1500i,
     Model::HX650i,
     Model::HX750i,
     Model::HX850i,
     Model::HX1000i,
     Model::HX1200i,
     Model::HX1500i,
+    Model::RM650i,
+    Model::RM750i,
+    Model::RM850i,
+    Model::RM1000i,
 ];
 
 /// Power supply output rail.
