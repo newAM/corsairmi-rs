@@ -73,6 +73,7 @@ pub enum Model {
     HX850i,
     HX1000i,
     HX1200i,
+    HX1500i,
 }
 
 impl Model {
@@ -97,12 +98,13 @@ impl Model {
             Model::HX850i => 0x1c06,
             Model::HX1000i => 0x1c07,
             Model::HX1200i => 0x1c08,
+            Model::HX1500i => 0x1c1f,
         }
     }
 }
 
 /// Array of all models.
-pub const MODELS: [Model; 9] = [
+pub const MODELS: [Model; 10] = [
     Model::RM650i,
     Model::RM750i,
     Model::RM850i,
@@ -112,6 +114,7 @@ pub const MODELS: [Model; 9] = [
     Model::HX850i,
     Model::HX1000i,
     Model::HX1200i,
+    Model::HX1500i,
 ];
 
 /// Power supply output rail.
