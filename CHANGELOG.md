@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- Added support for the HX1500i.
+  - This is a potentially breaking change because the `MODELS` array has been expanded.
+
 ## [1.0.0] - 2021-12-27
 ### Changed
 - Update the edition from `2018` to `2021`.
