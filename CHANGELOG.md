@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for the AX1500i and HX1500i models.
   - This is a potentially breaking change because the `MODELS` array has been expanded.
 
+### Removed
+- Removed `#[non_exhaustive]` from `Models`.
+
 ## [1.0.0] - 2021-12-27
 ### Changed
 - Update the edition from `2018` to `2021`.

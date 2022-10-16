@@ -62,7 +62,6 @@ pub const VID: u16 = 0x1B1C;
 
 /// Power supply models compatible with this API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
 pub enum Model {
     AX1500i,
     HX650i,
