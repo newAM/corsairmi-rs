@@ -18,7 +18,6 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - "1.56" # Update MSRV in Cargo.toml
           - "stable"
     steps:
       - uses: actions/checkout@v3

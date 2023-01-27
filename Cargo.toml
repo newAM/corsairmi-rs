@@ -2,7 +2,6 @@
 name = "corsairmi"
 version = "2.0.0"
 edition = "2021"
-rust-version = "1.56"  # update MSRV in CI
 authors = ["Alex Martens <alex@thinglab.org>"]
 repository = "https://github.com/newAM/corsairmi-rs"
 license = "MIT"
