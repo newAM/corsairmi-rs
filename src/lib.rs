@@ -189,14 +189,13 @@ impl From<io::Error> for OpenError {
 impl std::fmt::Display for OpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OpenError::Io(e) => write!(f, "{}", e),
+            OpenError::Io(e) => write!(f, "{e}"),
             OpenError::InvalidVendorId(vid) => write!(
                 f,
-                "Invalid power supply vendor ID 0x{:04X} (expected 0x{:04X})",
-                vid, VID
+                "Invalid power supply vendor ID 0x{vid:04X} (expected 0x{VID:04X})"
             ),
             OpenError::InvalidProductId(pid) => {
-                write!(f, "Invalid power supply product ID 0x{:04X}", pid)
+                write!(f, "Invalid power supply product ID 0x{pid:04X}")
             }
         }
     }
@@ -688,7 +687,7 @@ mod tests {
         for model in MODELS.iter() {
             let pid: u16 = model.pid();
             if pids.get(&pid).is_some() {
-                panic!("PID 0x{:04X} for model {:?} is a duplicate", pid, model);
+                panic!("PID 0x{pid:04X} for model {model:?} is a duplicate");
             }
             pids.insert(model.pid());
         }
