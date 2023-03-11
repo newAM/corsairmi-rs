@@ -221,7 +221,7 @@ fn valid_vid_pid(vid: u16, pid: u16) -> bool {
 
 /// Last component of a pathbuf, if it exists.
 fn last_component(p: &Path) -> Option<OsString> {
-    Some(p.components().into_iter().last()?.as_os_str().to_owned())
+    Some(p.components().last()?.as_os_str().to_owned())
 }
 
 /// List power supply device paths.
