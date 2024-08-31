@@ -1,3 +1,6 @@
+//! **Deprecated**
+//! Newer Linux kernels have a native driver for these power supplies.
+//!
 //! Read data from Corsair RMi and HXi series power supplies.
 //!
 //! This uses the Linux HIDRAW interface to communicate with the power supply.
